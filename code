@@ -1,0 +1,129 @@
+from flask import Flask, request, jsonify
+import sqlite3
+
+app = Flask(__name__)
+
+def get_db_connection():
+    conn = sqlite3.connect('data.db', check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.route('/api/records', methods=['POST'])
+def create_record():
+    data = request.get_json()
+    name = data.get('name')
+    value = data.get('value')
+
+    if not name or not value:
+        return jsonify({'error': 'Name and value are required.'}), 400
+
+    with get_db_connection() as conn:
+        conn.execute('INSERT INTO records (name, value) VALUES (?, ?)', (name, value))
+        conn.commit()
+
+    return jsonify({'message': 'Record created successfully.'}), 201
+
+@app.route('/api/records', methods=['GET'])
+def get_records():
+    with get_db_connection() as conn:
+        records = conn.execute('SELECT * FROM records').fetchall()
+        records_list = [{'id': row['id'], 'name': row['name'], 'value': row['value']} for row in records]
+
+@app.route('/api/records/<int:record_id>', methods=['PUT'])
+def update_record(record_id):
+    data = request.get_json()
+    name = data.get('name')
+    value = data.get('value')
+
+    if not name or not value:
+        return jsonify({"error": "Name and value are required."}), 400
+
+    with get_db_connection() as conn:
+        record = conn.execute('SELECT * FROM records WHERE id = ?', (record_id,)).fetchone()
+        if record is None:
+            return jsonify({"error": "Record not found."}), 404
+
+        conn.execute('UPDATE records SET name = ?, value = ? WHERE id = ?', (name, value, record_id))
+        conn.commit()
+    
+    return jsonify({"message": "Record updated successfully."}), 200
+
+@app.route('/api/records/<int:record_id>', methods=['DELETE'])
+def delete_record(record_id):
+    with get_db_connection() as conn:
+        record = conn.execute('SELECT * FROM records WHERE id = ?', (record_id,)).fetchone()
+        if record is None:
+            return jsonify({"error": "Record not found."}), 404
+
+        conn.execute('DELETE FROM records WHERE id = ?', (record_id,))
+        conn.commit()
+
+    return jsonify({"message": "Record deleted successfully."}), 200
+
+    
+    return jsonify(records_list), 200
+
+if __name__ == '__main__':
+    print("Flask app is starting...")
+    print("Starting Flask server on port 5001...")
+    app.run(host='0.0.0.0', port=5001, debug=True)
+
+# Database connection function
+def get_db_connection():
+    try:
+        db_path = os.path.join(os.path.expanduser("~/Downloads"), "data.db")
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except sqlite3.Error as e:
+        raise Exception(f"Database connection failed: {e}")
+
+# Create database table if not exists
+def create_table():
+    with get_db_connection() as conn:
+        conn.execute('''CREATE TABLE IF NOT EXISTS records (
+                        id INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        value TEXT NOT NULL)''')
+
+# Initialize database
+create_table()
+
+# Home route
+@app.route('/', methods=['GET'])
+def home():
+    return "Welcome to the API-to-Database Integration Project!"
+
+# Create Record (POST)
+@app.route('/api/records', methods=['POST'])
+def create_record():
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'Invalid JSON data provided.'}), 400
+
+        name = data.get('name')
+        value = data.get('value')
+
+        # Validation: Check if name and value are present
+        if not name or not value:
+            return jsonify({'error': 'Name and value are required.'}), 400
+
+        # Validation: Ensure name and value are strings
+        if not isinstance(name, str) or not isinstance(value, str):
+            return jsonify({'error': 'Name and value must be strings.'}), 400
+
+        # Validation: Set character limits
+        if len(name) > 100 or len(value) > 500:
+            return jsonify({'error': 'Name or value exceeds character limit.'}), 400
+
+        # Database insertion with secure parameterized query
+        with get_db_connection() as conn:
+            conn.execute('INSERT INTO records (name, value) VALUES (?, ?)', (name, value))
+            conn.commit()
+
+        return jsonify({'message': 'Record created successfully.'}), 201
+
+    except Exception:
+        return jsonify({'error': 'An unexpected error occurred.'}), 500
